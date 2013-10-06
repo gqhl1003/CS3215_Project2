@@ -29,22 +29,15 @@ int main(int argc, char *argv[])
     int clientSock;		    /* socket descriptor */
     struct sockaddr_in serv_addr;   /* The server address */
 
-    char *studentName;		    /* Your Name */
+    char message[512];		    /* Your Name */
 
     char sndBuf[SNDBUFSIZE];	    /* Send Buffer */
     unsigned char rcvBuf[RCVBUFSIZE];	    /* Receive Buffer */
     
     int i;			    /* Counter Value */
 
-    char* serverIP = "130.207.114.21";
+    char* serverIP = "127.0.0.1";
 
-    /* Get the Student Name from the command line */
-    if (argc != 2) 
-    {
-	printf("Incorrect input format. The correct format is:\n\tnameChanger your_name\n");
-	exit(1);
-    }
-    studentName = argv[1];
     memset(&sndBuf, 0, RCVBUFSIZE);
     memset(&rcvBuf, 0, RCVBUFSIZE);
 
@@ -57,47 +50,36 @@ int main(int argc, char *argv[])
 
 
     /* Construct the server address structure */
-    memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = inet_addr(serverIP);
     serv_addr.sin_port = htons(4001);
 
 
     /* Establish connecction to the server */
-    if(connect(clientSock, (struct sockaddr *) &serv_addr, sizeof(serv_addr))< 0)
-        printf("connecting server failed");
-    
-    /* Send the string to the server */
-    i = strlen(studentName);
-    printf("my string length is %d bytes \n",i );
-    if(send(clientSock, studentName, i, 0)!= i){
-        printf(" send() sent unexpected number of bytes");
-    }
+    if(connect(clientSock, (struct sockaddr *) &serv_addr, sizeof(serv_addr))< 0){
+        printf("connecting server failed\n");
+        return 1;
+}
+    printf("CONNECTED");
 
+while(1){  
+    /* Send the string to the server */
+    printf("type here: ");
+    scanf("%s", sndBuf);
+    if(send(clientSock, sndBuf, strlen(sndBuf), 0) < 0){
+        printf(" send() sent unexpected number of bytes");
+        return 1;
+    }
 
     /* Receive and print response from the server */
-    unsigned int totalRecv = 0;
-    while(totalRecv < 32){
-        i = recv(clientSock,rcvBuf,RCVBUFSIZE - 1, 0);
-         totalRecv += i;
-        if(totalRecv < 0)
-            printf("revv() failed");
-        else if (totalRecv == 0)
-            printf("connection closed");
-            
+        if(recv(clientSock,rcvBuf,RCVBUFSIZE - 1, 0)<0){
+            printf("recv falied"); 
+            break;      
     }
-        /*i = recv(clientSock, rcvBuf, RCVBUFSIZE, 0);
-
-*/
-    printf("i received %s \n", rcvBuf);
-    printf("total received %d bytes\n", i);
-
-
-    printf("%s\n", studentName);
-    printf("Transformed input is: ");
-    for(i = 0; i < MDLEN; i++) printf("%02x", rcvBuf[i]);
-    printf("\n");
-
+        printf("Server reply: ");
+        puts(rcvBuf);
+}
+    close(clientSock);
     return 0;
 }
 

@@ -16,96 +16,104 @@
 #include <unistd.h>	  /* for close() */
 #include <string.h>	  /* support any string ops */
 #include <openssl/evp.h>  /* for OpenSSL EVP digest libraries/SHA256 */
+#include <pthread.h>
 
 #define RCVBUFSIZE 512		/* The receive buffer size */
 #define SNDBUFSIZE 512		/* The send buffer size */
 #define BUFSIZE 40		/* Your name can be as many as 40 chars*/
 
+void *threadify(void *);
 /* The main function */
 int main(int argc, char *argv[])
 {
 
     int serverSock;				/* Server Socket */
     int clientSock;				/* Client Socket */
+    int *new_sock;
     struct sockaddr_in changeServAddr;		/* Local address */
     struct sockaddr_in changeClntAddr;		/* Client address */
-    unsigned short changeServPort = 4001;		/* Server port */
-    unsigned int clntLen;			/* Length of address data struct */
-
-    char nameBuf[BUFSIZE];			/* Buff to store name from client */
-    unsigned char md_value[EVP_MAX_MD_SIZE];	/* Buff to store change result */
-    EVP_MD_CTX *mdctx;				/* Digest data structure declaration */
-    const EVP_MD *md;				/* Digest data structure declaration */
-    int md_len, totleRecv;					/* Digest data structure size tracking */
-
-
+    int clntLen;
     /* Create new TCP Socket for incoming requests*/
     serverSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); 
 
     if(serverSock < 0){
-        perror(" creating socket failed");
+        perror(" creating socket failed\n");
+        return 1;
     }
 
+    puts("socket created\n");
+
     /* Construct local address structure*/
-    memset(&changeServAddr, 0, sizeof(changeServAddr));
     changeServAddr.sin_family = AF_INET;
     changeServAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    changeServAddr.sin_port = htons(changeServPort);
+    changeServAddr.sin_port = htons(4001);
     
     /* Bind to local address structure */
     if(bind(serverSock, (struct sockaddr *)&changeServAddr, sizeof(changeServAddr)) < 0){
-        perror("bind() failed");
-        /*exit(1);*/
+        perror("bind() failed\n");
+        return 1;
     }
-
-    //bind(serverSock, (struct sockaddr *)&changeServAddr, sizeof(changeServAddr));
+    printf("bind is done\n");
 
     /* Listen for incoming connections */
     if(listen(serverSock, 10)< 0){
-        perror("listen() failed");
-        /*exit(1);*/
+        perror("listen() failed\n");
+        return 1;
     }
+
+    puts("listening ...... \n");
+    clntLen = sizeof(changeClntAddr);
 
 
     /* Loop server forever*/
-    while(1)
+    while((clientSock = accept(serverSock, (struct sockaddr *)&changeClntAddr, &clntLen) ))
     {
-        
-	/* Accept incoming connection */
-     clntLen = sizeof(changeClntAddr);
-     clientSock = accept(serverSock, (struct sockaddr *)&changeClntAddr, &clntLen);
-        if(clientSock < 0)
-        {
-            printf(" accept failed");
-        }
-	/* Extract Your Name from the packet, store in nameBuf */
-	 memset(nameBuf, 0, sizeof(nameBuf));  
-        totleRecv = recv(clientSock, nameBuf, BUFSIZE, 0);
-        if(totleRecv < 0){
-            printf("receive failed");
-        }
-        else if(totleRecv == 0){
-            printf(" finish");
-        }
-            printf(" message received %d\n ", totleRecv);
-	/* Run this and return the final value in md_value to client */
-	/* Takes the client name and changes it */
-	/* Students should NOT touch this code */
-	  OpenSSL_add_all_digests();
-	  md = EVP_get_digestbyname("SHA256");
-	  mdctx = EVP_MD_CTX_create();
-	  EVP_DigestInit_ex(mdctx, md, NULL);
-	  EVP_DigestUpdate(mdctx, nameBuf, strlen(nameBuf));
-	  EVP_DigestFinal_ex(mdctx, md_value, &md_len);
-	  EVP_MD_CTX_destroy(mdctx);
+     puts(" connection accepted \n");
+     pthread_t tid;
+     new_sock = malloc(1);
+     *new_sock = clientSock;
+     puts("creating a pthread now\n");
+     if(pthread_create(&tid,NULL,threadify, (void*)new_sock)<0){
+        puts("create thread failed");
+        return 1;
 
-	/* Return md_value to client */
-      /*int i;
-    printf("Transformed input is: ");
-    for(i = 0; i < md_len; i++) printf("%02x", nameBuf[i]);
-    printf("\n");*/
-	send(clientSock,md_value,md_len,0);
+     }
+     printf("pthread has been created, and threadify assigned\n");
     }
 
-}
+    if(clientSock < 0){
+        puts("accept connetion falied\n");
+        return 1;
+    }
+    return 0;
+
+   }
+
+    void *threadify(void* arg){
+        puts("threadify comes into the play....\n");
+        char client_message[SNDBUFSIZE];
+        int sock = *(int *)arg;
+        int read_size;
+        while((read_size = recv(sock, client_message, SNDBUFSIZE, 0))>0){
+              // if(read(sock, &value, BUFSIZE) < BUFSIZE){
+              //   close(sock);
+              //   printf("threadify, value cant be read from  socket");
+            //sending the message back to client
+            write(sock, client_message, strlen(client_message));
+            }
+
+            if(read_size == 0){
+                close(sock);
+                return 0;
+            }
+
+            else if(read_size == -1){
+                close(sock);
+                puts("write falied\n");
+                return 1;
+            }
+        free(sock);
+        return 0;
+    }
+
 
